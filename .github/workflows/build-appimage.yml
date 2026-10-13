@@ -1,0 +1,91 @@
+name: Build Linux AppImage
+
+# Builds a portable DeckCraft AppImage from the merged main branch and publishes it to a
+# GitHub Release so anyone can download it without building anything locally.
+#
+#   Download: https://github.com/osama-moh-ramadan/deckcraft/releases (tag: appimage-latest)
+#
+# Uses the project's own packaging script (packaging/linux/package.sh), which downloads
+# appimagetool automatically. Built on ubuntu-22.04 for wide glibc compatibility, as the
+# script recommends.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: appimage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune -af >/dev/null 2>&1 || true
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      # Optional real fonts (fallback build works without them; the build.rs only warns).
+      - name: Fetch craft-fonts
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: storytold/craft-fonts
+          ref: 43913056ce82a3fdad0ef69f6b88d1dc922a8104
+          path: craft-fonts
+
+      - name: Point the build at craft-fonts
+        if: hashFiles('craft-fonts/fonts/manifest.txt') != ''
+        run: echo "CRAFT_FONTS_DIR=$GITHUB_WORKSPACE/craft-fonts" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zsync
+
+      - name: Build AppImage
+        run: ./packaging/linux/package.sh --formats appimage
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deckcraft-appimage
+          path: dist/release/*.AppImage*
+          if-no-files-found: error
+
+      - name: Publish to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="appimage-latest"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            git tag "$TAG"
+            git push origin "$TAG"
+            gh release create "$TAG" \
+              --title "DeckCraft Linux AppImage" \
+              --notes "Automated AppImage build of DeckCraft \`main\` (${{ github.sha }}).
+
+          Download the \`.AppImage\`, make it executable and run it:
+
+          \`\`\`sh
+          chmod +x deckcraft-*-linux-x86_64.AppImage
+          ./deckcraft-*-linux-x86_64.AppImage
+          \`\`\`"
+          fi
+          gh release upload "$TAG" dist/release/* --clobber
