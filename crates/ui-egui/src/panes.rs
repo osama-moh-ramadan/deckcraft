@@ -263,7 +263,7 @@ fn format_shape(app: &mut SlideApp, ui: &mut Ui) {
                 _ => "auto",
             };
             for (l, k) in
-                [("No fill", "none"), ("Solid fill", "solid"), ("Gradient fill", "gradient"), ("Pattern fill", "pattern"), ("Automatic", "auto")]
+                [("No fill", "none"), ("Solid fill", "solid"), ("Gradient fill", "gradient"), ("Picture fill", "picture"), ("Pattern fill", "pattern"), ("Automatic", "auto")]
             {
                 if ui.radio(kind == k, l).clicked() {
                     match k {
@@ -274,6 +274,14 @@ fn format_shape(app: &mut SlideApp, ui: &mut Ui) {
                             "shape.fill",
                             json!({"gradient": {"stops": [[0, "accent1"], [1, {"scheme": "accent1", "lumMod": 50000}]], "angle": 90}}),
                         ),
+                        "picture" => {
+                            if let Some(pick) = app.services.pick_open.as_mut()
+                                && let Some(path) = pick("picture")
+                                && let Some(Ok(bytes)) = app.services.read.as_ref().map(|r| r(&path))
+                            {
+                                let _ = app.run("shape.fill", json!({"picture": deckcraft_engine::cmd::base64_encode(&bytes)}));
+                            }
+                        }
                         "pattern" => run(app, "shape.fill", json!({"pattern": {"preset": "pct25", "fg": "accent1", "bg": "bg1"}})),
                         _ => run(app, "shape.fill", json!({"reset": true})),
                     }
@@ -303,6 +311,14 @@ fn format_shape(app: &mut SlideApp, ui: &mut Ui) {
                     let ng = deckcraft_model::style::Gradient { rotate_with_shape: rot, ..g.clone() };
                     run(app, "shape.fill", json!({"gradient": crate::fillui::gradient_json(&ng)}));
                 }
+            }
+            if let Some(Fill::Picture(_)) = &sh.fill
+                && ui.button("Insert picture from file…").clicked()
+                && let Some(pick) = app.services.pick_open.as_mut()
+                && let Some(path) = pick("picture")
+                && let Some(Ok(bytes)) = app.services.read.as_ref().map(|r| r(&path))
+            {
+                let _ = app.run("shape.fill", json!({"picture": deckcraft_engine::cmd::base64_encode(&bytes)}));
             }
             ui.add_space(8.0);
             ui.label(egui::RichText::new("Line").font(theme::bold(13.0)));

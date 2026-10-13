@@ -811,11 +811,15 @@ impl Session {
                         Ok(Value::Null)
                     }
                     ShapeKind::Shape | ShapeKind::Connector { .. } if !sh.is_line() => {
-                        let pos = text_pos(st, &sh, p);
-                        self.execute("text.edit", &json!({"id": id, "at": [pos.0, pos.1]}))?;
-                        self.execute("text.selectWord", &json!({}))
+                        // Open the Format Shape pane on double-click
+                        self.ui_requests.push(crate::UiRequest::Pane { id: "format".into() });
+                        Ok(Value::Null)
                     }
-                    ShapeKind::Group { .. } => Ok(Value::Null),
+                    ShapeKind::Group { .. } => {
+                        // Open the Format Shape pane for groups too
+                        self.ui_requests.push(crate::UiRequest::Pane { id: "format".into() });
+                        Ok(Value::Null)
+                    }
                     _ => {
                         self.ui_requests.push(crate::UiRequest::Pane { id: "format".into() });
                         Ok(Value::Null)
