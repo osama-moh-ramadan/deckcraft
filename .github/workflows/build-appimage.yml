@@ -54,10 +54,14 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Install packaging tools
+      - name: Install build & packaging tools
+        # Same Linux build dependencies as ci.yml (alsa-sys needs libasound2-dev to build;
+        # the rest keep the winit/wgpu stack linkable), plus zsync for the AppImage delta file.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zsync
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev \
+            zsync
 
       - name: Build AppImage
         run: ./packaging/linux/package.sh --formats appimage
